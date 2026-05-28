@@ -1,0 +1,11 @@
+/* Galaxie Copernicus - For legal headings and titles */
+@import url('https://fonts.cdnfonts.com/css/galaxie-copernicus');
+
+/* Styrene B - For UI and body text */
+@import url('https://fonts.cdnfonts.com/css/styrene-b');
+
+/* Fallback to professional serif and sans-serif */
+:root {
+  --font-heading: 'Galaxie Copernicus', 'Georgia', 'Times New Roman', serif;
+  --font-body: 'Styrene B', 'Inter', 'Helvetica Neue', sans-serif;
+}

@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/groq",
+      "destination": "https://api.groq.com/openai/v1/chat/completions"
+    }
+  ]
+}
