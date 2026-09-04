@@ -91,9 +91,9 @@ export default function App() {
 
       setDocumentHistory((prev) => [historyItem, ...prev]);
       navigate(`/editor/${newId}`);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error generating draft:', error);
-      alert('Failed to generate document. Please make sure your VITE_GROQ_API_KEY is set in .env.local and restart the server.');
+      alert(`Failed to generate document: ${error?.message || 'Please check your VITE_GROQ_API_KEY in .env.local and restart the server.'}`);
     } finally {
       setIsGenerating(false);
     }

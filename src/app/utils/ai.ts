@@ -1269,30 +1269,52 @@ export async function generateDraft(type: DocumentType, context: string): Promis
    const specificPrompt = DOCUMENT_PROMPTS[type] || "";
    const systemPrompt = `${BASE_SYSTEM_INSTRUCTION}\n\n${specificPrompt}`;
 
-   const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-         'Authorization': `Bearer ${apiKey}`,
-         'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-         messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: `Please draft a document based on the following context:\n\n${context}` }
-         ],
-         model: 'llama-3.3-70b-versatile',
-         temperature: 0.2,
-         max_tokens: 4000,
-      }),
-   });
+   const modelsToTry = [
+      'qwen/qwen3.8-27b',
+      'openai/gpt-oss-120b',
+      'qwen/qwen3.6-27b',
+      'groq/compound',
+      'llama-3.3-70b-versatile'
+   ];
 
-   if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Groq API error:', response.status, errorText);
-      throw new Error(`Groq API error (${response.status}): ${errorText || 'Failed to generate draft'}`);
+   let lastError: any = null;
+
+   for (const model of modelsToTry) {
+      try {
+         const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+               'Authorization': `Bearer ${apiKey}`,
+               'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+               messages: [
+                  { role: 'system', content: systemPrompt },
+                  { role: 'user', content: `Please draft a document based on the following context:\n\n${context}` }
+               ],
+               model: model,
+               temperature: 0.2,
+               max_tokens: 4000,
+            }),
+         });
+
+         if (!response.ok) {
+            const errorText = await response.text();
+            console.warn(`Groq API model ${model} failed (${response.status}): ${errorText}`);
+            lastError = new Error(`Groq API error for ${model} (${response.status}): ${errorText || 'Failed to generate draft'}`);
+            continue;
+         }
+
+         const data = await response.json();
+         let rawText: string = data.choices[0]?.message?.content || '';
+         // Remove thinking / reasoning XML tags if present
+         rawText = rawText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+         return plainTextToHTML(rawText);
+      } catch (err) {
+         console.warn(`Failed with model ${model}:`, err);
+         lastError = err;
+      }
    }
 
-   const data = await response.json();
-   const rawText: string = data.choices[0].message.content;
-   return plainTextToHTML(rawText);
+   throw lastError || new Error('Failed to generate draft with available models.');
 }
