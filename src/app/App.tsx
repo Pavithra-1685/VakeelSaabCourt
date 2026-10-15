@@ -6,9 +6,12 @@ import { LegalFactsForm } from './components/LegalFactsForm';
 import { LegalEditor } from './components/LegalEditor';
 import { DocumentHistory, DocumentHistoryItem } from './components/DocumentHistory';
 import { VersionControl, DocumentVersion } from './components/VersionControl';
-import { History, X, ArrowLeft } from 'lucide-react';
+import { History, ArrowLeft } from 'lucide-react';
 
 import { generateDraft } from './utils/ai';
+import { useAuth } from './context/AuthContext';
+import { documentService } from './services/documentService';
+import { UserProfileMenu } from './components/auth/UserProfileMenu';
 
 interface CurrentDocument {
   id: string;
@@ -21,6 +24,7 @@ interface CurrentDocument {
 
 export default function App() {
   const navigate = useNavigate();
+  const { user, profile } = useAuth();
   
   const [isGenerating, setIsGenerating] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -28,34 +32,39 @@ export default function App() {
   const [currentDocument, setCurrentDocument] = useState<CurrentDocument | undefined>();
   const [documentHistory, setDocumentHistory] = useState<DocumentHistoryItem[]>([]);
 
-  // Initial Load from LocalStorage
+  // Load document history on mount or when user changes
   useEffect(() => {
-    const savedHistory = localStorage.getItem('vakeel_saab_history');
-    if (savedHistory) {
-      try {
-        const parsed = JSON.parse(savedHistory);
-        const formatted = parsed.map((doc: any) => ({
-          ...doc,
-          createdAt: new Date(doc.createdAt),
-          lastModified: new Date(doc.lastModified)
-        }));
-        setDocumentHistory(formatted);
-      } catch (e) {
-        console.error("Failed to parse history", e);
+    let isMounted = true;
+    async function loadDocs() {
+      const history = await documentService.getHistory(user?.id);
+      if (isMounted) {
+        setDocumentHistory(history);
       }
     }
-  }, []);
+    loadDocs();
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id]);
 
-  // Sync History to LocalStorage
+  // Sync History to LocalStorage for offline cache
   useEffect(() => {
     localStorage.setItem('vakeel_saab_history', JSON.stringify(documentHistory));
   }, [documentHistory]);
+
+  const handleSyncDrafts = async () => {
+    if (!user?.id) return;
+    const count = await documentService.syncLocalDraftsToCloud(user.id);
+    const refreshed = await documentService.getHistory(user.id);
+    setDocumentHistory(refreshed);
+    alert(`Successfully synced ${count} draft(s) with your chambers cloud account.`);
+  };
 
   const handleGenerateDraft = async (facts: string, selectedType: DocumentType) => {
     setIsGenerating(true);
 
     try {
-      const content = await generateDraft(selectedType, facts);
+      const content = await generateDraft(selectedType, facts, profile || undefined);
       const now = new Date();
       const title = `${getDocumentTypeTitle(selectedType)} - ${now.toLocaleDateString('en-IN')}`;
       const newId = `doc-${Date.now()}`;
@@ -77,7 +86,7 @@ export default function App() {
       };
 
       setCurrentDocument(newDocument);
-      localStorage.setItem(`doc-${newId}`, JSON.stringify(newDocument));
+      await documentService.saveDocument(newDocument, user?.id);
 
       // Add to history
       const historyItem: DocumentHistoryItem = {
@@ -118,7 +127,7 @@ export default function App() {
     };
 
     setCurrentDocument(updatedDocument);
-    localStorage.setItem(`doc-${currentDocument.id}`, JSON.stringify(updatedDocument));
+    documentService.saveDocument(updatedDocument, user?.id);
 
     setDocumentHistory((prev) =>
       prev.map((doc) =>
@@ -137,7 +146,7 @@ export default function App() {
     }
   };
 
-  const handleDuplicateDocument = (docId: string) => {
+  const handleDuplicateDocument = async (docId: string) => {
     const docData = localStorage.getItem(`doc-${docId}`);
     if (!docData) return;
 
@@ -146,20 +155,19 @@ export default function App() {
       const now = new Date();
       const newId = `doc-${Date.now()}`;
       
-      const newDoc = {
+      const newDoc: CurrentDocument = {
         ...original,
         id: newId,
         title: `${original.title} (Copy)`,
-        createdAt: now.toISOString(),
         versions: [{
           id: `v-init-${Date.now()}`,
-          timestamp: now.toISOString(),
+          timestamp: now,
           label: 'Duplicated Version',
           contentPreview: original.content
         }]
       };
 
-      localStorage.setItem(`doc-${newId}`, JSON.stringify(newDoc));
+      await documentService.saveDocument(newDoc, user?.id);
 
       const historyItem: DocumentHistoryItem = {
         id: newId,
@@ -177,10 +185,10 @@ export default function App() {
     }
   };
 
-  const handleDeleteDocument = (docId: string) => {
+  const handleDeleteDocument = async (docId: string) => {
     if (confirm('Are you sure you want to delete this document?')) {
       setDocumentHistory((prev) => prev.filter((doc) => doc.id !== docId));
-      localStorage.removeItem(`doc-${docId}`);
+      await documentService.deleteDocument(docId, user?.id);
 
       if (currentDocument?.id === docId) {
         setCurrentDocument(undefined);
@@ -206,6 +214,7 @@ export default function App() {
             handleDeleteDocument={handleDeleteDocument}
             handleDuplicateDocument={handleDuplicateDocument}
             setCurrentDocument={setCurrentDocument}
+            onSyncDrafts={handleSyncDrafts}
           />
         } />
 
@@ -225,7 +234,6 @@ export default function App() {
               currentDocument={currentDocument}
               setCurrentDocument={setCurrentDocument}
               onContentChange={handleContentChange}
-              onRestore={handleRestoreVersion}
               onExport={handleExport}
               onShowHistory={() => setShowHistory(!showHistory)}
               onShowVersions={() => setShowVersions(true)}
@@ -275,7 +283,8 @@ function WorkspaceWrapper({
   setShowHistory, 
   handleDeleteDocument,
   handleDuplicateDocument,
-  setCurrentDocument
+  setCurrentDocument,
+  onSyncDrafts
 }: any) {
   const navigate = useNavigate();
   
@@ -286,16 +295,28 @@ function WorkspaceWrapper({
   return (
     <div className="flex h-full w-full">
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-7xl mx-auto p-8">
-          <div className="flex items-center justify-between mb-8">
+        <div className="max-w-7xl mx-auto p-6 md:p-8">
+          <div className="flex items-center justify-between mb-8 pb-4 border-b border-[var(--grey-300)]">
             <button
               onClick={() => navigate('/')}
-              className="flex items-center gap-2 text-sm text-[var(--grey-600)] hover:text-[var(--matte-black)] transition-colors"
+              className="flex items-center gap-2 text-sm text-[var(--grey-600)] hover:text-[var(--matte-black)] transition-colors font-medium"
             >
               <ArrowLeft className="w-4 h-4" />
               Back to Home
             </button>
+
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setShowHistory(true)}
+                className="hidden sm:flex items-center gap-2 text-xs text-[var(--grey-600)] hover:text-[var(--matte-black)] px-3 py-1.5 border border-[var(--grey-300)] transition-colors"
+              >
+                <History className="w-3.5 h-3.5" />
+                Drafts ({documentHistory.length})
+              </button>
+              <UserProfileMenu onSyncDrafts={onSyncDrafts} syncCount={documentHistory.length} />
+            </div>
           </div>
+
           <DocumentTypeSelector 
             onSelect={(type) => navigate(`/draft/${type}`)} 
           />
@@ -336,7 +357,18 @@ function DraftRouteWrapper({ onGenerate, onBack, isGenerating }: any) {
 
   return (
     <div className="h-full w-full overflow-y-auto">
-      <div className="max-w-4xl mx-auto p-8">
+      <div className="max-w-4xl mx-auto p-6 md:p-8">
+        <div className="flex items-center justify-between mb-6 pb-4 border-b border-[var(--grey-300)]">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 text-sm text-[var(--grey-600)] hover:text-[var(--matte-black)] transition-colors font-medium"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Workspace
+          </button>
+          <UserProfileMenu />
+        </div>
+
         <LegalFactsForm
           documentType={type as DocumentType}
           onGenerate={(facts) => onGenerate(facts, type as DocumentType)}
@@ -352,14 +384,12 @@ function EditorRouteWrapper({
   currentDocument, 
   setCurrentDocument, 
   onContentChange, 
-  onRestore,
   onExport,
   onShowHistory, 
   onShowVersions, 
   onBack 
 }: any) {
   const { id } = useParams();
-  const navigate = useNavigate();
 
   useEffect(() => {
     if (id && (!currentDocument || currentDocument.id !== id)) {
@@ -387,7 +417,6 @@ function EditorRouteWrapper({
       <LegalEditor
         initialContent={currentDocument.content}
         onContentChange={onContentChange}
-        onRestore={onRestore}
         onExport={onExport}
         onShowHistory={onShowHistory}
         onShowVersions={onShowVersions}

@@ -1258,7 +1258,11 @@ function escapeHTML(str: string): string {
     .replace(/"/g, '&quot;');
 }
 
-export async function generateDraft(type: DocumentType, context: string): Promise<string> {
+export async function generateDraft(
+  type: DocumentType, 
+  context: string,
+  advocateDetails?: { fullName?: string; barCouncilNo?: string; courtJurisdiction?: string }
+): Promise<string> {
    const apiKey = import.meta.env.VITE_GROQ_API_KEY;
    console.log('Using API Key:', apiKey ? 'FOUND' : 'MISSING');
 
@@ -1277,6 +1281,15 @@ export async function generateDraft(type: DocumentType, context: string): Promis
       'llama-3.3-70b-versatile'
    ];
 
+   let userContent = `Please draft a document based on the following context:\n\n${context}`;
+   if (advocateDetails?.fullName) {
+      userContent += `\n\nADVOCATE / FILING COUNSEL DETAILS:
+Advocate Name: ${advocateDetails.fullName}
+Bar Council Enrollment: ${advocateDetails.barCouncilNo || 'As on record'}
+Primary Jurisdiction: ${advocateDetails.courtJurisdiction || 'High Court'}
+Please personalize the verification clause, vakalatnama sign-off, and filing advocate block using these advocate credentials.`;
+   }
+
    let lastError: any = null;
 
    for (const model of modelsToTry) {
@@ -1290,7 +1303,7 @@ export async function generateDraft(type: DocumentType, context: string): Promis
             body: JSON.stringify({
                messages: [
                   { role: 'system', content: systemPrompt },
-                  { role: 'user', content: `Please draft a document based on the following context:\n\n${context}` }
+                  { role: 'user', content: userContent }
                ],
                model: model,
                temperature: 0.2,

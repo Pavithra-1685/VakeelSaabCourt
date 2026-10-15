@@ -1,11 +1,15 @@
 import { FileText, Shield, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useAuth } from '../context/AuthContext';
+import { UserProfileMenu } from './auth/UserProfileMenu';
 
 interface LandingPageProps {
   onGetStarted: () => void;
 }
 
 export function LandingPage({ onGetStarted }: LandingPageProps) {
+  const { profile } = useAuth();
+
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
@@ -29,7 +33,7 @@ export function LandingPage({ onGetStarted }: LandingPageProps) {
       <motion.header
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        className="border-b border-[var(--grey-300)] px-8 py-6"
+        className="border-b border-[var(--grey-300)] px-8 py-5"
       >
         <div className="max-w-7xl mx-auto flex items-center justify-between">
 
@@ -42,17 +46,22 @@ export function LandingPage({ onGetStarted }: LandingPageProps) {
               Vakeel Saab<span className="text-[var(--gold)]">.</span>
             </h1>
 
-            <span className="text-[10px] tracking-[0.2em] uppercase text-[var(--grey-600)] mt-1">
+            <span className="text-[10px] tracking-[0.2em] uppercase text-[var(--grey-600)] mt-0.5">
               by Naratral
             </span>
           </div>
 
-          {/* Launch Workspace */}
-          <button
-            className="px-5 py-2 border border-[var(--grey-300)] text-[var(--matte-black)] text-sm hover:border-[var(--gold)] hover:text-[var(--gold-dark)] transition-colors"
-          >
-            Launch Workspace
-          </button>
+          {/* Right Action Menu */}
+          <div className="flex items-center gap-4">
+            <button
+              onClick={onGetStarted}
+              className="px-4 py-2 border border-[var(--grey-300)] text-[var(--matte-black)] text-xs font-medium hover:border-[var(--gold)] hover:text-[var(--gold-dark)] transition-colors"
+            >
+              Launch Workspace
+            </button>
+            <div className="h-4 w-px bg-[var(--grey-300)]" />
+            <UserProfileMenu />
+          </div>
 
         </div>
       </motion.header>
@@ -68,6 +77,15 @@ export function LandingPage({ onGetStarted }: LandingPageProps) {
 
           {/* Hero Heading */}
           <div className="space-y-4">
+            {profile && (
+              <motion.div
+                variants={itemVariants}
+                className="inline-flex items-center gap-2 px-3 py-1 bg-[var(--grey-100)] border border-[var(--gold)]/40 rounded-full text-xs text-[var(--matte-black)] mb-2"
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Chambers Session: <strong>{profile.fullName}</strong> ({profile.courtJurisdiction || 'Verified Advocate'})</span>
+              </motion.div>
+            )}
 
             <motion.h2
               variants={itemVariants}

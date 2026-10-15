@@ -19,6 +19,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { useEffect } from 'react';
+import { UserProfileMenu } from './auth/UserProfileMenu';
 
 interface LegalEditorProps {
   initialContent: string;
@@ -26,7 +27,6 @@ interface LegalEditorProps {
   onExport?: (format: 'docx' | 'pdf') => void;
   onShowHistory?: () => void;
   onShowVersions?: () => void;
-  onRestore?: (version: any) => void;
   onBack?: () => void;
 }
 
@@ -55,7 +55,6 @@ export function LegalEditor({
   onExport,
   onShowHistory,
   onShowVersions,
-  onRestore,
   onBack,
 }: LegalEditorProps) {
   const editor = useEditor({
@@ -235,6 +234,17 @@ export function LegalEditor({
               <span className="hidden md:inline">Copy Text</span>
               <FileText className="w-4 h-4 md:hidden" />
             </button>
+            {onShowHistory && (
+              <button
+                id="editor-history-btn"
+                onClick={onShowHistory}
+                className="flex items-center gap-2 px-3 md:px-4 py-2 border border-[var(--grey-300)] hover:bg-[var(--grey-100)] transition-colors text-sm"
+                title="Document History"
+              >
+                <FileText className="w-4 h-4" />
+                <span className="hidden md:inline">Drafts</span>
+              </button>
+            )}
             {onShowVersions && (
               <button
                 id="editor-versions-btn"
@@ -257,6 +267,8 @@ export function LegalEditor({
                 <span className="hidden md:inline">Export</span>
               </button>
             )}
+            <div className="h-5 w-px bg-[var(--grey-300)] mx-1 hidden sm:block" />
+            <UserProfileMenu />
           </div>
         </div>
 
