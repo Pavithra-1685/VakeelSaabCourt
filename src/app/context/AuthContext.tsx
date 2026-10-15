@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { sqliteService, SQLiteAdvocate } from '../services/sqlite';
+import { sqliteService } from '../services/sqlite';
 
 export interface AdvocateProfile {
   id: string;
@@ -224,20 +224,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const downloadSqliteBackup = () => {
-    const binary = sqliteService.exportDatabaseBlob();
-    if (!binary) {
-      alert('SQLite database has not been initialized yet.');
-      return;
-    }
-    const blob = new Blob([binary], { type: 'application/x-sqlite3' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `vakeel_saab_${new Date().toISOString().split('T')[0]}.sqlite`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    sqliteService.downloadDatabase();
   };
 
   return (

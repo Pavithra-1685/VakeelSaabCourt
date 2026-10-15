@@ -421,4 +421,21 @@ export const sqliteService = {
     if (!dbInstance) return null;
     return dbInstance.export();
   },
+
+  downloadDatabase(filename = `vakeel_saab_${new Date().toISOString().split('T')[0]}.sqlite`): void {
+    const binary = this.exportDatabaseBlob();
+    if (!binary) {
+      alert('SQLite database has not been initialized yet.');
+      return;
+    }
+    const blob = new Blob([binary.buffer as ArrayBuffer], { type: 'application/x-sqlite3' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
 };
