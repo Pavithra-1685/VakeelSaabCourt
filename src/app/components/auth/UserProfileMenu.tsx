@@ -5,7 +5,8 @@ import {
   ChevronDown,
   Award,
   Building2,
-  Cloud,
+  Database,
+  Download,
   Edit3,
   X
 } from 'lucide-react';
@@ -23,7 +24,8 @@ export function UserProfileMenu({ onSyncDrafts, syncCount = 0, showJoinButton = 
     openAuthModal,
     signOut,
     updateProfile,
-    isSupabaseConfigured
+    isSqliteReady,
+    downloadSqliteBackup
   } = useAuth();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -151,9 +153,9 @@ export function UserProfileMenu({ onSyncDrafts, syncCount = 0, showJoinButton = 
                 <span className="truncate">{profile.courtJurisdiction || 'High Court of Delhi'}</span>
               </div>
               <div className="flex items-center gap-1.5 text-[11px]">
-                <Cloud className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                <Database className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
                 <span className="text-emerald-700 font-medium">
-                  {isSupabaseConfigured ? 'Supabase Cloud Connected' : 'Local Chambers Sync Active'}
+                  {isSqliteReady ? 'In-Browser SQLite Active' : 'Initializing SQLite...'}
                 </span>
               </div>
             </div>
@@ -178,8 +180,8 @@ export function UserProfileMenu({ onSyncDrafts, syncCount = 0, showJoinButton = 
                 className="w-full px-3 py-2 text-xs text-[var(--matte-black)] hover:bg-[var(--grey-100)] flex items-center justify-between transition-colors text-left"
               >
                 <div className="flex items-center gap-2.5">
-                  <Cloud className="w-4 h-4 text-[var(--gold)]" />
-                  <span>Sync Local Drafts</span>
+                  <Database className="w-4 h-4 text-[var(--gold)]" />
+                  <span>Sync Drafts to SQLite</span>
                 </div>
                 {syncCount > 0 && (
                   <span className="px-1.5 py-0.5 bg-[var(--matte-black)] text-white text-[10px] rounded-full">
@@ -188,6 +190,17 @@ export function UserProfileMenu({ onSyncDrafts, syncCount = 0, showJoinButton = 
                 )}
               </button>
             )}
+
+            <button
+              onClick={() => {
+                downloadSqliteBackup();
+                setIsOpen(false);
+              }}
+              className="w-full px-3 py-2 text-xs text-[var(--matte-black)] hover:bg-[var(--grey-100)] flex items-center gap-2.5 transition-colors text-left"
+            >
+              <Download className="w-4 h-4 text-[var(--gold)]" />
+              <span>Export SQLite DB (.sqlite)</span>
+            </button>
 
             <div className="border-t border-[var(--grey-300)] my-1" />
 

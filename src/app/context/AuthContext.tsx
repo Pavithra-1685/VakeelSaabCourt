@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { supabase, isSupabaseConfigured } from '../services/supabase';
+import { sqliteService, SQLiteAdvocate } from '../services/sqlite';
 
 export interface AdvocateProfile {
   id: string;
@@ -22,7 +22,7 @@ interface AuthContextType {
   profile: AdvocateProfile | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  isSupabaseConfigured: boolean;
+  isSqliteReady: boolean;
   isAuthModalOpen: boolean;
   authModalTab: 'login' | 'register' | 'forgot';
   openAuthModal: (tab?: 'login' | 'register' | 'forgot') => void;
@@ -32,10 +32,10 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: Error | null; message?: string }>;
   updateProfile: (updates: Partial<AdvocateProfile>) => Promise<{ error: Error | null }>;
+  downloadSqliteBackup: () => void;
 }
 
 const LOCAL_STORAGE_SESSION_KEY = 'vakeel_saab_current_user';
-const LOCAL_STORAGE_USERS_KEY = 'vakeel_saab_registered_advocates';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -43,6 +43,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<{ id: string; email: string } | null>(null);
   const [profile, setProfile] = useState<AdvocateProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSqliteReady, setIsSqliteReady] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'login' | 'register' | 'forgot'>('login');
 
@@ -55,152 +56,76 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsAuthModalOpen(false);
   }, []);
 
-  // Helper to fetch or assemble advocate profile
-  const fetchProfile = useCallback(async (userId: string, userEmail: string, metadata?: any) => {
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', userId)
-          .single();
-
-        if (data && !error) {
-          return {
-            id: data.id,
-            email: data.email || userEmail,
-            fullName: data.full_name || metadata?.full_name || metadata?.fullName || userEmail.split('@')[0],
-            barCouncilNo: data.bar_council_no || metadata?.bar_council_no || metadata?.barCouncilNo || '',
-            courtJurisdiction: data.court_jurisdiction || metadata?.court_jurisdiction || metadata?.courtJurisdiction || 'High Court of Delhi',
-            avatarUrl: data.avatar_url || metadata?.avatar_url,
-            createdAt: data.created_at || new Date().toISOString(),
-          };
-        }
-      } catch {
-        // Fallback to metadata if table query fails
-      }
-    }
-
-    // Default or Local Storage Profile
-    return {
-      id: userId,
-      email: userEmail,
-      fullName: metadata?.fullName || metadata?.full_name || (userEmail ? `Adv. ${userEmail.split('@')[0]}` : 'Advocate'),
-      barCouncilNo: metadata?.barCouncilNo || metadata?.bar_council_no || 'D/2024/01',
-      courtJurisdiction: metadata?.courtJurisdiction || metadata?.court_jurisdiction || 'High Court of Delhi',
-      avatarUrl: metadata?.avatarUrl || metadata?.avatar_url || '',
-      createdAt: new Date().toISOString(),
-    };
-  }, []);
-
-  // Initialize Session
+  // Initialize SQLite WebAssembly Engine & Session
   useEffect(() => {
     let isMounted = true;
 
-    async function initAuth() {
+    async function initSqliteAuth() {
       try {
-        if (isSupabaseConfigured && supabase) {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.user && isMounted) {
-            setUser({ id: session.user.id, email: session.user.email || '' });
-            const prof = await fetchProfile(session.user.id, session.user.email || '', session.user.user_metadata);
-            if (isMounted) setProfile(prof);
-          }
+        await sqliteService.getDb();
+        if (isMounted) setIsSqliteReady(true);
 
-          // Listen for Supabase auth state change
-          const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
-            if (!isMounted) return;
-            if (newSession?.user) {
-              setUser({ id: newSession.user.id, email: newSession.user.email || '' });
-              const prof = await fetchProfile(newSession.user.id, newSession.user.email || '', newSession.user.user_metadata);
-              setProfile(prof);
+        const localSession = localStorage.getItem(LOCAL_STORAGE_SESSION_KEY);
+        if (localSession && isMounted) {
+          try {
+            const parsed = JSON.parse(localSession);
+            // Verify from SQLite database
+            const advocate = await sqliteService.getAdvocateById(parsed.id);
+            if (advocate) {
+              setUser({ id: advocate.id, email: advocate.email });
+              setProfile({
+                id: advocate.id,
+                email: advocate.email,
+                fullName: advocate.fullName,
+                barCouncilNo: advocate.barCouncilNo,
+                courtJurisdiction: advocate.courtJurisdiction,
+                avatarUrl: advocate.avatarUrl,
+                createdAt: advocate.createdAt,
+              });
             } else {
+              // Session invalid in SQLite, clear it
+              localStorage.removeItem(LOCAL_STORAGE_SESSION_KEY);
               setUser(null);
               setProfile(null);
             }
-          });
-
-          return () => {
-            authListener?.subscription.unsubscribe();
-          };
-        } else {
-          // Local storage session fallback
-          const localSession = localStorage.getItem(LOCAL_STORAGE_SESSION_KEY);
-          if (localSession && isMounted) {
-            try {
-              const parsed = JSON.parse(localSession);
-              // Clean up stale mock demo user if present
-              if (parsed.email === 'advocate.counsel@gmail.com' || parsed.barCouncilNo === 'SC/2023/104') {
-                localStorage.removeItem(LOCAL_STORAGE_SESSION_KEY);
-                setUser(null);
-                setProfile(null);
-              } else {
-                setUser({ id: parsed.id, email: parsed.email });
-                setProfile(parsed);
-              }
-            } catch (e) {
-              console.error('Failed to parse local session', e);
-            }
+          } catch (e) {
+            console.error('Failed to parse SQLite session', e);
           }
         }
       } catch (err) {
-        console.error('Error initializing authentication:', err);
+        console.error('Error initializing SQLite database:', err);
       } finally {
         if (isMounted) setIsLoading(false);
       }
     }
 
-    initAuth();
+    initSqliteAuth();
 
     return () => {
       isMounted = false;
     };
-  }, [fetchProfile]);
+  }, []);
 
-  // Sign In with Email & Password
+  // Sign In with SQLite Database
   const signInWithEmail = async (email: string, password: string): Promise<{ error: Error | null }> => {
     setIsLoading(true);
     try {
-      if (isSupabaseConfigured && supabase) {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) return { error };
+      const advocate = await sqliteService.authenticateAdvocate(email, password);
+      const advocateProfile: AdvocateProfile = {
+        id: advocate.id,
+        email: advocate.email,
+        fullName: advocate.fullName,
+        barCouncilNo: advocate.barCouncilNo,
+        courtJurisdiction: advocate.courtJurisdiction,
+        avatarUrl: advocate.avatarUrl,
+        createdAt: advocate.createdAt,
+      };
 
-        if (data.user) {
-          const prof = await fetchProfile(data.user.id, data.user.email || email, data.user.user_metadata);
-          setUser({ id: data.user.id, email: data.user.email || email });
-          setProfile(prof);
-          closeAuthModal();
-        }
-        return { error: null };
-      } else {
-        // Local mode sign in
-        const existingUsersRaw = localStorage.getItem(LOCAL_STORAGE_USERS_KEY);
-        const existingUsers: any[] = existingUsersRaw ? JSON.parse(existingUsersRaw) : [];
-        const match = existingUsers.find((u) => u.email.toLowerCase() === email.toLowerCase());
-
-        let signedInProfile: AdvocateProfile;
-        if (match) {
-          signedInProfile = match;
-        } else {
-          // Allow seamless sign in with demo credentials
-          signedInProfile = {
-            id: `adv-${Date.now()}`,
-            email,
-            fullName: `Adv. ${email.split('@')[0]}`,
-            barCouncilNo: 'D/2024/789',
-            courtJurisdiction: 'High Court of Delhi',
-            createdAt: new Date().toISOString(),
-          };
-          existingUsers.push(signedInProfile);
-          localStorage.setItem(LOCAL_STORAGE_USERS_KEY, JSON.stringify(existingUsers));
-        }
-
-        setUser({ id: signedInProfile.id, email: signedInProfile.email });
-        setProfile(signedInProfile);
-        localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(signedInProfile));
-        closeAuthModal();
-        return { error: null };
-      }
+      setUser({ id: advocate.id, email: advocate.email });
+      setProfile(advocateProfile);
+      localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(advocateProfile));
+      closeAuthModal();
+      return { error: null };
     } catch (err: any) {
       return { error: err };
     } finally {
@@ -208,7 +133,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Sign Up with Email, Password & Advocate Metadata
+  // Sign Up with SQLite Database
   const signUpWithEmail = async (
     email: string,
     password: string,
@@ -216,142 +141,103 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ): Promise<{ error: Error | null }> => {
     setIsLoading(true);
     try {
-      if (isSupabaseConfigured && supabase) {
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              full_name: metadata.fullName,
-              bar_council_no: metadata.barCouncilNo,
-              court_jurisdiction: metadata.courtJurisdiction,
-            },
-          },
-        });
+      const advocate = await sqliteService.registerAdvocate(email, password, {
+        fullName: metadata.fullName,
+        barCouncilNo: metadata.barCouncilNo,
+        courtJurisdiction: metadata.courtJurisdiction,
+      });
 
-        if (error) return { error };
+      const advocateProfile: AdvocateProfile = {
+        id: advocate.id,
+        email: advocate.email,
+        fullName: advocate.fullName,
+        barCouncilNo: advocate.barCouncilNo,
+        courtJurisdiction: advocate.courtJurisdiction,
+        avatarUrl: advocate.avatarUrl,
+        createdAt: advocate.createdAt,
+      };
 
-        if (data.user) {
-          // Attempt to create or upsert profile in public.profiles table if exists
-          try {
-            await supabase.from('profiles').upsert({
-              id: data.user.id,
-              full_name: metadata.fullName,
-              bar_council_no: metadata.barCouncilNo,
-              court_jurisdiction: metadata.courtJurisdiction,
-              created_at: new Date().toISOString(),
-            });
-          } catch {
-            // Profile table may not be configured yet, metadata remains in auth
-          }
-
-          const prof: AdvocateProfile = {
-            id: data.user.id,
-            email: data.user.email || email,
-            fullName: metadata.fullName,
-            barCouncilNo: metadata.barCouncilNo,
-            courtJurisdiction: metadata.courtJurisdiction,
-            createdAt: new Date().toISOString(),
-          };
-          setUser({ id: data.user.id, email: data.user.email || email });
-          setProfile(prof);
-          closeAuthModal();
-        }
-        return { error: null };
-      } else {
-        // Local mode sign up
-        const newProfile: AdvocateProfile = {
-          id: `adv-${Date.now()}`,
-          email,
-          fullName: metadata.fullName || `Adv. ${email.split('@')[0]}`,
-          barCouncilNo: metadata.barCouncilNo || 'D/2024/001',
-          courtJurisdiction: metadata.courtJurisdiction || 'High Court of Delhi',
-          createdAt: new Date().toISOString(),
-        };
-
-        const existingUsersRaw = localStorage.getItem(LOCAL_STORAGE_USERS_KEY);
-        const existingUsers: any[] = existingUsersRaw ? JSON.parse(existingUsersRaw) : [];
-        existingUsers.push(newProfile);
-        localStorage.setItem(LOCAL_STORAGE_USERS_KEY, JSON.stringify(existingUsers));
-
-        setUser({ id: newProfile.id, email: newProfile.email });
-        setProfile(newProfile);
-        localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(newProfile));
-        closeAuthModal();
-        return { error: null };
-      }
+      setUser({ id: advocate.id, email: advocate.email });
+      setProfile(advocateProfile);
+      localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(advocateProfile));
+      closeAuthModal();
+      return { error: null };
     } catch (err: any) {
       return { error: err };
     } finally {
       setIsLoading(false);
     }
   };
-
-
 
   // Sign Out
   const signOut = async () => {
     setIsLoading(true);
     try {
-      if (isSupabaseConfigured && supabase) {
-        await supabase.auth.signOut();
-      }
       localStorage.removeItem(LOCAL_STORAGE_SESSION_KEY);
       setUser(null);
       setProfile(null);
-    } catch (err) {
-      console.error('Error signing out:', err);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Reset Password
+  // Reset Password via SQLite
   const resetPassword = async (email: string) => {
     try {
-      if (isSupabaseConfigured && supabase) {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/reset-password`,
-        });
-        if (error) return { error };
-        return { error: null, message: 'Password reset link sent to your registered email.' };
-      } else {
-        return {
-          error: null,
-          message: 'Development Mode: Password reset instructions simulated for ' + email,
-        };
+      const exists = await sqliteService.checkEmailExists(email);
+      if (!exists) {
+        return { error: new Error('No registered advocate account found with this email in SQLite.') };
       }
+      return {
+        error: null,
+        message: `SQLite: Password recovery instructions confirmed for registered counsel ${email}.`,
+      };
     } catch (err: any) {
       return { error: err };
     }
   };
 
-  // Update Profile
+  // Update Advocate Profile in SQLite
   const updateProfile = async (updates: Partial<AdvocateProfile>) => {
     if (!user || !profile) return { error: new Error('User not authenticated') };
 
-    const updatedProfile = { ...profile, ...updates };
-
     try {
-      if (isSupabaseConfigured && supabase) {
-        const { error } = await supabase.from('profiles').upsert({
-          id: user.id,
-          full_name: updatedProfile.fullName,
-          bar_council_no: updatedProfile.barCouncilNo,
-          court_jurisdiction: updatedProfile.courtJurisdiction,
-          avatar_url: updatedProfile.avatarUrl,
-          updated_at: new Date().toISOString(),
-        });
-        if (error) return { error };
-      } else {
-        localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(updatedProfile));
-      }
+      const updated = await sqliteService.updateAdvocateProfile(user.id, {
+        fullName: updates.fullName,
+        barCouncilNo: updates.barCouncilNo,
+        courtJurisdiction: updates.courtJurisdiction,
+      });
+
+      const updatedProfile: AdvocateProfile = {
+        ...profile,
+        fullName: updated.fullName,
+        barCouncilNo: updated.barCouncilNo,
+        courtJurisdiction: updated.courtJurisdiction,
+      };
 
       setProfile(updatedProfile);
+      localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(updatedProfile));
       return { error: null };
     } catch (err: any) {
       return { error: err };
     }
+  };
+
+  const downloadSqliteBackup = () => {
+    const binary = sqliteService.exportDatabaseBlob();
+    if (!binary) {
+      alert('SQLite database has not been initialized yet.');
+      return;
+    }
+    const blob = new Blob([binary], { type: 'application/x-sqlite3' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `vakeel_saab_${new Date().toISOString().split('T')[0]}.sqlite`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -361,7 +247,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         profile,
         isAuthenticated: Boolean(user),
         isLoading,
-        isSupabaseConfigured,
+        isSqliteReady,
         isAuthModalOpen,
         authModalTab,
         openAuthModal,
@@ -371,6 +257,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signOut,
         resetPassword,
         updateProfile,
+        downloadSqliteBackup,
       }}
     >
       {children}

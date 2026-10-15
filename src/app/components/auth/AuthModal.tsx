@@ -11,7 +11,7 @@ import {
   EyeOff,
   AlertCircle,
   CheckCircle2,
-  Sparkles,
+  Database,
   X,
   ArrowRight
 } from 'lucide-react';
@@ -38,7 +38,7 @@ export function AuthModal() {
     signInWithEmail,
     signUpWithEmail,
     resetPassword,
-    isSupabaseConfigured
+    isSqliteReady
   } = useAuth();
 
   const [activeTab, setActiveTab] = useState<'login' | 'register' | 'forgot'>('login');
@@ -242,24 +242,25 @@ export function AuthModal() {
             </div>
           )}
 
-          {/* Fallback Local Mode Notice */}
-          {!isSupabaseConfigured && (
-            <div className="p-2.5 bg-amber-50/70 border border-amber-200/80 rounded text-[11px] text-amber-900 flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-[var(--gold)]" />
-                <span>Demo Auth Active (Supabase keys optional)</span>
-              </div>
-              <div className="flex gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => handleFillDemo('delhi')}
-                  className="px-2 py-0.5 bg-amber-100 hover:bg-amber-200 text-amber-950 font-medium text-[10px] rounded transition-colors"
-                >
-                  Quick Fill
-                </button>
-              </div>
+          {/* SQLite Engine Status & Quick Fill */}
+          <div className="p-2.5 bg-neutral-50 border border-neutral-200 rounded text-[11px] text-neutral-800 flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Database className="w-3.5 h-3.5 text-[var(--gold)]" />
+              <span className="font-medium">
+                {isSqliteReady ? 'In-Browser SQLite Active' : 'Initializing SQLite Engine...'}
+              </span>
             </div>
-          )}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-neutral-500">Sample:</span>
+              <button
+                type="button"
+                onClick={() => handleFillDemo('delhi')}
+                className="px-2 py-0.5 bg-neutral-200 hover:bg-neutral-300 text-neutral-800 font-medium text-[10px] rounded transition-colors"
+              >
+                Delhi HC
+              </button>
+            </div>
+          </div>
 
           {/* 1. SIGN IN FORM */}
           {activeTab === 'login' && (

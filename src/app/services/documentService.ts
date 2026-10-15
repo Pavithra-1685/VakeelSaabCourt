@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from './supabase';
+import { sqliteService } from './sqlite';
 import { DocumentHistoryItem } from '../components/DocumentHistory';
 import { DocumentType } from '../components/DocumentTypeSelector';
 import { DocumentVersion } from '../components/VersionControl';
@@ -18,28 +18,23 @@ export interface SavedDocument {
 const LOCAL_STORAGE_HISTORY_KEY = 'vakeel_saab_history';
 
 export const documentService = {
-  // Fetch history for current user (Cloud + Local fallback)
-  async getHistory(userId?: string): Promise<DocumentHistoryItem[]> {
-    if (isSupabaseConfigured && supabase && userId) {
+  // Fetch history for current advocate (SQLite + Local fallback)
+  async getHistory(advocateId?: string): Promise<DocumentHistoryItem[]> {
+    if (advocateId) {
       try {
-        const { data, error } = await supabase
-          .from('documents')
-          .select('id, title, type, created_at, last_modified, content')
-          .eq('user_id', userId)
-          .order('last_modified', { ascending: false });
-
-        if (!error && data && data.length > 0) {
-          return data.map((d) => ({
+        const sqliteDocs = await sqliteService.getDocuments(advocateId);
+        if (sqliteDocs.length > 0) {
+          return sqliteDocs.map((d) => ({
             id: d.id,
             title: d.title,
             type: d.type as DocumentType,
-            createdAt: new Date(d.created_at),
-            lastModified: new Date(d.last_modified),
+            createdAt: new Date(d.createdAt),
+            lastModified: new Date(d.lastModified),
             preview: (d.content || '').replace(/<[^>]*>/g, '').substring(0, 150),
           }));
         }
       } catch (e) {
-        console.warn('Could not fetch cloud history, falling back to local storage', e);
+        console.warn('Could not read from SQLite, falling back to local cache', e);
       }
     }
 
@@ -59,46 +54,47 @@ export const documentService = {
     }
   },
 
-  // Save single document to Cloud & Local cache
-  async saveDocument(doc: SavedDocument, userId?: string): Promise<void> {
+  // Save single document to SQLite & Local cache
+  async saveDocument(doc: SavedDocument, advocateId?: string): Promise<void> {
     // 1. Cache locally
     localStorage.setItem(`doc-${doc.id}`, JSON.stringify(doc));
 
-    // 2. If logged in with Supabase, sync to cloud
-    if (isSupabaseConfigured && supabase && userId) {
+    // 2. If logged in, save to SQLite database
+    if (advocateId) {
       try {
-        await supabase.from('documents').upsert({
+        await sqliteService.saveDocument({
           id: doc.id,
-          user_id: userId,
+          advocateId,
           type: doc.type,
           title: doc.title,
           content: doc.content,
           facts: doc.facts,
           versions: doc.versions,
-          last_modified: new Date().toISOString(),
+          createdAt: doc.createdAt ? new Date(doc.createdAt).toISOString() : undefined,
+          lastModified: doc.lastModified ? new Date(doc.lastModified).toISOString() : undefined,
         });
       } catch (err) {
-        console.warn('Failed to sync document to cloud:', err);
+        console.warn('Failed to save to SQLite database:', err);
       }
     }
   },
 
   // Delete document
-  async deleteDocument(docId: string, userId?: string): Promise<void> {
+  async deleteDocument(docId: string, advocateId?: string): Promise<void> {
     localStorage.removeItem(`doc-${docId}`);
 
-    if (isSupabaseConfigured && supabase && userId) {
+    if (advocateId) {
       try {
-        await supabase.from('documents').delete().eq('id', docId).eq('user_id', userId);
+        await sqliteService.deleteDocument(docId, advocateId);
       } catch (err) {
-        console.warn('Failed to delete cloud document:', err);
+        console.warn('Failed to delete from SQLite:', err);
       }
     }
   },
 
-  // Sync all local drafts to user's cloud account
-  async syncLocalDraftsToCloud(userId: string): Promise<number> {
-    if (!isSupabaseConfigured || !supabase || !userId) return 0;
+  // Sync all local drafts to user's SQLite database
+  async syncLocalDraftsToSqlite(advocateId: string): Promise<number> {
+    if (!advocateId) return 0;
 
     const savedHistory = localStorage.getItem(LOCAL_STORAGE_HISTORY_KEY);
     if (!savedHistory) return 0;
@@ -111,16 +107,16 @@ export const documentService = {
         const fullDocData = localStorage.getItem(`doc-${item.id}`);
         if (fullDocData) {
           const parsed = JSON.parse(fullDocData);
-          await supabase.from('documents').upsert({
+          await sqliteService.saveDocument({
             id: item.id,
-            user_id: userId,
+            advocateId,
             type: parsed.type || item.type,
             title: parsed.title || item.title,
             content: parsed.content || '',
             facts: parsed.facts || '',
             versions: parsed.versions || [],
-            created_at: item.createdAt ? new Date(item.createdAt).toISOString() : new Date().toISOString(),
-            last_modified: item.lastModified ? new Date(item.lastModified).toISOString() : new Date().toISOString(),
+            createdAt: item.createdAt ? new Date(item.createdAt).toISOString() : undefined,
+            lastModified: item.lastModified ? new Date(item.lastModified).toISOString() : undefined,
           });
           syncedCount++;
         }
@@ -128,8 +124,27 @@ export const documentService = {
 
       return syncedCount;
     } catch (e) {
-      console.error('Error during local to cloud sync:', e);
+      console.error('Error during local to SQLite sync:', e);
       return 0;
     }
+  },
+
+  // Download the SQLite database binary file
+  downloadSqliteDatabase(): void {
+    const binary = sqliteService.exportDatabaseBlob();
+    if (!binary) {
+      alert('SQLite database is initializing or empty.');
+      return;
+    }
+
+    const blob = new Blob([binary], { type: 'application/x-sqlite3' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `vakeel_saab_court_${new Date().toISOString().split('T')[0]}.sqlite`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   },
 };

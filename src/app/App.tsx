@@ -54,10 +54,10 @@ export default function App() {
 
   const handleSyncDrafts = async () => {
     if (!user?.id) return;
-    const count = await documentService.syncLocalDraftsToCloud(user.id);
+    const count = await documentService.syncLocalDraftsToSqlite(user.id);
     const refreshed = await documentService.getHistory(user.id);
     setDocumentHistory(refreshed);
-    alert(`Successfully synced ${count} draft(s) with your chambers cloud account.`);
+    alert(`Successfully synced ${count} draft(s) to in-browser SQLite database.`);
   };
 
   const handleGenerateDraft = async (facts: string, selectedType: DocumentType) => {
