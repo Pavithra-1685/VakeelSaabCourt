@@ -55,6 +55,10 @@ export function AuthModal() {
   const [fullName, setFullName] = useState('');
   const [barCouncilNo, setBarCouncilNo] = useState('');
   const [courtJurisdiction, setCourtJurisdiction] = useState(COURT_JURISDICTIONS[1]);
+  const [showGoogleConfig, setShowGoogleConfig] = useState(false);
+  const [googleClientIdInput, setGoogleClientIdInput] = useState(
+    localStorage.getItem('vakeel_saab_google_client_id') || ''
+  );
 
   useEffect(() => {
     setActiveTab(authModalTab);
@@ -334,7 +338,18 @@ export function AuthModal() {
 
                 <button
                   type="button"
-                  onClick={() => signInWithGoogle()}
+                  onClick={async () => {
+                    setErrorMessage(null);
+                    setSuccessMessage(null);
+                    const res = await signInWithGoogle();
+                    if (res?.error) {
+                      if (res.error.message.includes('GOOGLE_CLIENT_ID_REQUIRED')) {
+                        setShowGoogleConfig(true);
+                      } else {
+                        setErrorMessage(res.error.message);
+                      }
+                    }
+                  }}
                   className="w-full mt-3 py-2 border border-[var(--grey-300)] hover:border-[var(--matte-black)] text-sm font-medium text-[var(--matte-black)] flex items-center justify-center gap-2 hover:bg-[var(--grey-100)] transition-colors"
                 >
                   <svg className="w-4 h-4" viewBox="0 0 24 24">
@@ -357,6 +372,40 @@ export function AuthModal() {
                   </svg>
                   Continue with Google
                 </button>
+
+                {showGoogleConfig && (
+                  <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded text-xs space-y-2 text-amber-950 animate-in fade-in">
+                    <p className="font-semibold text-xs">
+                      Navigate to Real Google Accounts:
+                    </p>
+                    <p className="text-[11px] text-amber-900 leading-relaxed">
+                      To open Google's account chooser (<code className="bg-amber-100 px-1 font-mono">accounts.google.com</code>), enter your Google OAuth Web Client ID (or add <code className="bg-amber-100 px-1 font-mono">VITE_GOOGLE_CLIENT_ID</code> in <code className="bg-amber-100 px-1 font-mono">.env.local</code>):
+                    </p>
+                    <div className="space-y-2 pt-1">
+                      <input
+                        type="text"
+                        placeholder="e.g. 123456789-xyz.apps.googleusercontent.com"
+                        value={googleClientIdInput}
+                        onChange={(e) => setGoogleClientIdInput(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-white border border-amber-300 text-xs text-black outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!googleClientIdInput.trim()) {
+                            setErrorMessage('Please enter a valid Google Client ID.');
+                            return;
+                          }
+                          localStorage.setItem('vakeel_saab_google_client_id', googleClientIdInput.trim());
+                          await signInWithGoogle();
+                        }}
+                        className="w-full py-1.5 bg-[var(--matte-black)] text-white hover:bg-[var(--gold-dark)] text-xs font-medium transition-colors"
+                      >
+                        Navigate to Google Accounts →
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </form>
           )}

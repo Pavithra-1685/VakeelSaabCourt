@@ -100,6 +100,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     async function initAuth() {
       try {
+        // Check for Google OAuth hash callback
+        if (window.location.hash && window.location.hash.includes('access_token')) {
+          const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+          const accessToken = hashParams.get('access_token');
+          if (accessToken) {
+            try {
+              const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                headers: { Authorization: `Bearer ${accessToken}` },
+              });
+              if (res.ok) {
+                const gUser = await res.json();
+                const googleProfile: AdvocateProfile = {
+                  id: `google-${gUser.sub}`,
+                  email: gUser.email,
+                  fullName: gUser.name ? `Adv. ${gUser.name}` : (gUser.email ? `Adv. ${gUser.email.split('@')[0]}` : 'Advocate'),
+                  barCouncilNo: '', // Real advocate can set their real Bar number in settings
+                  courtJurisdiction: 'High Court of Delhi',
+                  avatarUrl: gUser.picture || '',
+                  createdAt: new Date().toISOString(),
+                };
+                if (isMounted) {
+                  setUser({ id: googleProfile.id, email: googleProfile.email });
+                  setProfile(googleProfile);
+                  localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(googleProfile));
+                  window.history.replaceState(null, '', window.location.pathname + window.location.search);
+                  setIsLoading(false);
+                  return;
+                }
+              }
+            } catch (err) {
+              console.error('Error fetching Google userinfo:', err);
+            }
+          }
+        }
+
         if (isSupabaseConfigured && supabase) {
           const { data: { session } } = await supabase.auth.getSession();
           if (session?.user && isMounted) {
@@ -130,8 +165,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (localSession && isMounted) {
             try {
               const parsed = JSON.parse(localSession);
-              setUser({ id: parsed.id, email: parsed.email });
-              setProfile(parsed);
+              // Clean up stale mock demo user if present
+              if (parsed.email === 'advocate.counsel@gmail.com' || parsed.barCouncilNo === 'SC/2023/104') {
+                localStorage.removeItem(LOCAL_STORAGE_SESSION_KEY);
+                setUser(null);
+                setProfile(null);
+              } else {
+                setUser({ id: parsed.id, email: parsed.email });
+                setProfile(parsed);
+              }
             } catch (e) {
               console.error('Failed to parse local session', e);
             }
@@ -293,21 +335,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
         return { error };
       } else {
-        // Local demo Google Sign-In simulation
-        const demoGoogleUser: AdvocateProfile = {
-          id: `google-adv-${Date.now()}`,
-          email: 'advocate.counsel@gmail.com',
-          fullName: 'Adv. S. Ramanujan',
-          barCouncilNo: 'SC/2023/104',
-          courtJurisdiction: 'Supreme Court of India',
-          avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&h=120&q=80',
-          createdAt: new Date().toISOString(),
-        };
-        setUser({ id: demoGoogleUser.id, email: demoGoogleUser.email });
-        setProfile(demoGoogleUser);
-        localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(demoGoogleUser));
-        closeAuthModal();
-        return { error: null };
+        const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || localStorage.getItem('vakeel_saab_google_client_id');
+        if (clientId) {
+          const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` + new URLSearchParams({
+            client_id: clientId,
+            redirect_uri: window.location.origin,
+            response_type: 'token',
+            scope: 'openid email profile',
+            prompt: 'select_account',
+          }).toString();
+
+          window.location.href = authUrl;
+          return { error: null };
+        } else {
+          return {
+            error: new Error('GOOGLE_CLIENT_ID_REQUIRED'),
+          };
+        }
       }
     } catch (err: any) {
       return { error: err };
