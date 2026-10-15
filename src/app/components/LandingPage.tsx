@@ -8,7 +8,7 @@ interface LandingPageProps {
 }
 
 export function LandingPage({ onGetStarted }: LandingPageProps) {
-  const { profile } = useAuth();
+  const { profile, isAuthenticated, openAuthModal } = useAuth();
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -51,15 +51,8 @@ export function LandingPage({ onGetStarted }: LandingPageProps) {
             </span>
           </div>
 
-          {/* Right Action Menu */}
-          <div className="flex items-center gap-4">
-            <button
-              onClick={onGetStarted}
-              className="px-4 py-2 border border-[var(--grey-300)] text-[var(--matte-black)] text-xs font-medium hover:border-[var(--gold)] hover:text-[var(--gold-dark)] transition-colors"
-            >
-              Launch Workspace
-            </button>
-            <div className="h-4 w-px bg-[var(--grey-300)]" />
+          {/* Right Action Menu: Only Sign In / Profile */}
+          <div className="flex items-center">
             <UserProfileMenu />
           </div>
 
@@ -121,15 +114,21 @@ export function LandingPage({ onGetStarted }: LandingPageProps) {
             professional advocate standards.
           </motion.p>
 
-          {/* Get Started */}
+          {/* Join Chambers CTA */}
           <motion.button
             variants={itemVariants}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            onClick={onGetStarted}
-            className="mt-8 px-10 py-4 bg-[var(--matte-black)] text-[var(--pure-white)] border border-[var(--matte-black)] hover:bg-[var(--gold)] hover:border-[var(--gold)] transition-colors text-lg"
+            onClick={() => {
+              if (!isAuthenticated) {
+                openAuthModal('register');
+              } else {
+                onGetStarted();
+              }
+            }}
+            className="mt-8 px-10 py-4 bg-[var(--matte-black)] text-[var(--pure-white)] border border-[var(--matte-black)] hover:bg-[var(--gold)] hover:border-[var(--gold)] transition-colors text-lg font-medium cursor-pointer"
           >
-            Get Started
+            {isAuthenticated ? 'Enter Chambers Workspace' : 'Join Chambers'}
           </motion.button>
 
           {/* Feature Grid */}

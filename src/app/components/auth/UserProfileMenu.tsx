@@ -13,9 +13,10 @@ import {
 interface UserProfileMenuProps {
   onSyncDrafts?: () => void;
   syncCount?: number;
+  showJoinButton?: boolean;
 }
 
-export function UserProfileMenu({ onSyncDrafts, syncCount = 0 }: UserProfileMenuProps) {
+export function UserProfileMenu({ onSyncDrafts, syncCount = 0, showJoinButton = false }: UserProfileMenuProps) {
   const {
     profile,
     isAuthenticated,
@@ -68,7 +69,7 @@ export function UserProfileMenu({ onSyncDrafts, syncCount = 0 }: UserProfileMenu
     setIsEditModalOpen(false);
   };
 
-  // If not authenticated, render Sign In and Join Chambers CTA buttons
+  // If not authenticated, render Sign In (and optionally Join Chambers) CTA buttons
   if (!isAuthenticated || !profile) {
     return (
       <div className="flex items-center gap-3">
@@ -78,12 +79,14 @@ export function UserProfileMenu({ onSyncDrafts, syncCount = 0 }: UserProfileMenu
         >
           Sign In
         </button>
-        <button
-          onClick={() => openAuthModal('register')}
-          className="px-4 py-2 text-xs font-medium bg-[var(--matte-black)] text-[var(--pure-white)] border border-[var(--matte-black)] hover:bg-[var(--gold-dark)] hover:border-[var(--gold-dark)] transition-colors"
-        >
-          Join Chambers
-        </button>
+        {showJoinButton && (
+          <button
+            onClick={() => openAuthModal('register')}
+            className="px-4 py-2 text-xs font-medium bg-[var(--matte-black)] text-[var(--pure-white)] border border-[var(--matte-black)] hover:bg-[var(--gold-dark)] hover:border-[var(--gold-dark)] transition-colors"
+          >
+            Join Chambers
+          </button>
+        )}
       </div>
     );
   }
