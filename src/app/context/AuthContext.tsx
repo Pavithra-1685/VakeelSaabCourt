@@ -29,7 +29,6 @@ interface AuthContextType {
   closeAuthModal: () => void;
   signInWithEmail: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUpWithEmail: (email: string, password: string, metadata: SignUpMetadata) => Promise<{ error: Error | null }>;
-  signInWithGoogle: () => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: Error | null; message?: string }>;
   updateProfile: (updates: Partial<AdvocateProfile>) => Promise<{ error: Error | null }>;
@@ -100,41 +99,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     async function initAuth() {
       try {
-        // Check for Google OAuth hash callback
-        if (window.location.hash && window.location.hash.includes('access_token')) {
-          const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-          const accessToken = hashParams.get('access_token');
-          if (accessToken) {
-            try {
-              const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                headers: { Authorization: `Bearer ${accessToken}` },
-              });
-              if (res.ok) {
-                const gUser = await res.json();
-                const googleProfile: AdvocateProfile = {
-                  id: `google-${gUser.sub}`,
-                  email: gUser.email,
-                  fullName: gUser.name ? `Adv. ${gUser.name}` : (gUser.email ? `Adv. ${gUser.email.split('@')[0]}` : 'Advocate'),
-                  barCouncilNo: '', // Real advocate can set their real Bar number in settings
-                  courtJurisdiction: 'High Court of Delhi',
-                  avatarUrl: gUser.picture || '',
-                  createdAt: new Date().toISOString(),
-                };
-                if (isMounted) {
-                  setUser({ id: googleProfile.id, email: googleProfile.email });
-                  setProfile(googleProfile);
-                  localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(googleProfile));
-                  window.history.replaceState(null, '', window.location.pathname + window.location.search);
-                  setIsLoading(false);
-                  return;
-                }
-              }
-            } catch (err) {
-              console.error('Error fetching Google userinfo:', err);
-            }
-          }
-        }
-
         if (isSupabaseConfigured && supabase) {
           const { data: { session } } = await supabase.auth.getSession();
           if (session?.user && isMounted) {
@@ -323,40 +287,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Sign In with Google
-  const signInWithGoogle = async (): Promise<{ error: Error | null }> => {
-    try {
-      if (isSupabaseConfigured && supabase) {
-        const { error } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            redirectTo: window.location.origin,
-          },
-        });
-        return { error };
-      } else {
-        const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || localStorage.getItem('vakeel_saab_google_client_id');
-        if (clientId) {
-          const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` + new URLSearchParams({
-            client_id: clientId,
-            redirect_uri: window.location.origin,
-            response_type: 'token',
-            scope: 'openid email profile',
-            prompt: 'select_account',
-          }).toString();
 
-          window.location.href = authUrl;
-          return { error: null };
-        } else {
-          return {
-            error: new Error('GOOGLE_CLIENT_ID_REQUIRED'),
-          };
-        }
-      }
-    } catch (err: any) {
-      return { error: err };
-    }
-  };
 
   // Sign Out
   const signOut = async () => {
@@ -437,7 +368,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         closeAuthModal,
         signInWithEmail,
         signUpWithEmail,
-        signInWithGoogle,
         signOut,
         resetPassword,
         updateProfile,
