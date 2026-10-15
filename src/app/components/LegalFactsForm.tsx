@@ -19,6 +19,7 @@ const DOCUMENT_TITLES: Record<DocumentType, string> = {
   'civil-pleading': 'Civil Pleading',
   'counter-affidavit': 'Counter Affidavit',
   'written-statement': 'Written Statement',
+  'general-legal-advice': 'General Legal Advice',
 };
 
 const PLACEHOLDERS: Record<DocumentType, string> = {
@@ -121,6 +122,16 @@ Example:
 The defendant denies the allegations in the plaint and states:
 1. The contents of paragraph 2 are admitted
 2. The contents of paragraph 3 are denied. The defendant states that...`,
+  'general-legal-advice': `Outline the legal query or scenario for legal counsel:
+
+- Background facts and parties involved
+- Key dispute, query, or transaction
+- Specific questions of law or strategy
+- Relevant statutes, agreements, or jurisdiction
+- Desired legal outcome or risk assessment
+
+Example:
+Client seeking advice regarding termination clause under commercial lease agreement dated 10th January 2025. Landlord issued 15-day notice alleging unauthorized alteration...`,
 };
 
 export function LegalFactsForm({ documentType, onGenerate, onBack, isGenerating }: LegalFactsFormProps) {
