@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useEffect } from 'react';
 import { UserProfileMenu } from './auth/UserProfileMenu';
+import { LegalReviewBanner } from './LegalReviewBanner';
 
 interface LegalEditorProps {
   initialContent: string;
@@ -28,6 +29,9 @@ interface LegalEditorProps {
   onShowHistory?: () => void;
   onShowVersions?: () => void;
   onBack?: () => void;
+  validationReport?: any;
+  verifiedProvisions?: any[];
+  documentTitle?: string;
 }
 
 // Font size map using heading levels + paragraph
@@ -56,6 +60,9 @@ export function LegalEditor({
   onShowHistory,
   onShowVersions,
   onBack,
+  validationReport,
+  verifiedProvisions,
+  documentTitle,
 }: LegalEditorProps) {
   const editor = useEditor({
     extensions: [
@@ -271,6 +278,13 @@ export function LegalEditor({
             <UserProfileMenu />
           </div>
         </div>
+
+        {/* ── Stage G: Legal Review & Verified Sources Banner ── */}
+        <LegalReviewBanner
+          validation={validationReport}
+          verifiedProvisions={verifiedProvisions}
+          documentTitle={documentTitle}
+        />
 
         {/* ── Formatting Toolbar ── */}
         <div className="border-b border-[var(--grey-300)] px-4 py-2 flex items-center gap-1 flex-wrap">

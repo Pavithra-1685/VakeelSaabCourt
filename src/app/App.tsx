@@ -9,6 +9,7 @@ import { VersionControl, DocumentVersion } from './components/VersionControl';
 import { History, ArrowLeft } from 'lucide-react';
 
 import { generateDraft } from './utils/ai';
+import { executeLegalPipeline } from './legal/pipeline/legalGenerationPipeline';
 import { useAuth } from './context/AuthContext';
 import { documentService } from './services/documentService';
 import { UserProfileMenu } from './components/auth/UserProfileMenu';
@@ -20,6 +21,9 @@ interface CurrentDocument {
   content: string;
   facts: string;
   versions: DocumentVersion[];
+  validationReport?: any;
+  verifiedProvisions?: any[];
+  qualityScore?: number;
 }
 
 export default function App() {
@@ -64,7 +68,15 @@ export default function App() {
     setIsGenerating(true);
 
     try {
-      const content = await generateDraft(selectedType, facts, profile || undefined);
+      const pipelineResult = await executeLegalPipeline({
+        situation: {
+          incidentDescription: facts,
+          rawUserPrompt: facts,
+        },
+        overrideType: selectedType,
+        advocate: profile || undefined,
+      });
+
       const now = new Date();
       const title = `${getDocumentTypeTitle(selectedType)} - ${now.toLocaleDateString('en-IN')}`;
       const newId = `doc-${Date.now()}`;
@@ -73,16 +85,19 @@ export default function App() {
         id: newId,
         type: selectedType,
         title,
-        content,
+        content: pipelineResult.contentHtml,
         facts,
         versions: [
           {
             id: `version-${Date.now()}`,
             timestamp: now,
             label: 'Initial Draft',
-            contentPreview: stripHTML(content).substring(0, 200),
+            contentPreview: stripHTML(pipelineResult.contentHtml).substring(0, 200),
           },
         ],
+        validationReport: pipelineResult.validation,
+        verifiedProvisions: pipelineResult.verifiedProvisions,
+        qualityScore: pipelineResult.qualityScore,
       };
 
       setCurrentDocument(newDocument);
@@ -95,7 +110,7 @@ export default function App() {
         type: selectedType,
         createdAt: now,
         lastModified: now,
-        preview: stripHTML(content).substring(0, 150),
+        preview: stripHTML(pipelineResult.contentHtml).substring(0, 150),
       };
 
       setDocumentHistory((prev) => [historyItem, ...prev]);
@@ -421,6 +436,9 @@ function EditorRouteWrapper({
         onShowHistory={onShowHistory}
         onShowVersions={onShowVersions}
         onBack={onBack}
+        validationReport={currentDocument.validationReport}
+        verifiedProvisions={currentDocument.verifiedProvisions}
+        documentTitle={currentDocument.title}
       />
     </div>
   );
@@ -432,16 +450,21 @@ function EditorRouteWrapper({
 
 function getDocumentTypeTitle(type: DocumentType): string {
   const titles: Record<DocumentType, string> = {
-    'fir-complaint': 'FIR Complaint',
-    'bail-petition': 'Bail Petition',
-    'affidavit': 'Affidavit',
-    'legal-notice': 'Legal Notice',
+    'police-complaint': 'Complaint to Police (SHO)',
+    'sp-representation': 'Representation to SP (S. 173(4) BNSS)',
+    'bnss-175-3-application': 'Application u/S 175(3) BNSS',
+    'bail-petition': 'Regular Bail Application (BNSS)',
+    'anticipatory-bail': 'Anticipatory Bail Application (S. 482 BNSS)',
+    'magistrate-complaint': 'Private Criminal Complaint (S. 223 BNSS)',
+    'legal-notice': 'Legal Demand Notice',
     'writ-petition': 'Writ Petition',
-    'criminal-complaint': 'Criminal Complaint',
     'civil-pleading': 'Civil Pleading',
     'counter-affidavit': 'Counter Affidavit',
     'written-statement': 'Written Statement',
-    'general-legal-advice': 'General Legal Advice'
+    'affidavit': 'Affidavit',
+    'general-legal-advice': 'General Legal Advice',
+    'fir-complaint': 'Complaint to Police (SHO)',
+    'criminal-complaint': 'Private Criminal Complaint',
   };
   return titles[type] || 'Legal Document';
 }

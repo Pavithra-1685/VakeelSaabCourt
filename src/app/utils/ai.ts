@@ -1,4 +1,6 @@
 import { DocumentType } from '../components/DocumentTypeSelector';
+import { executeLegalPipeline, LegalGenerationResult } from '../legal/pipeline/legalGenerationPipeline';
+export { executeLegalPipeline, type LegalGenerationResult };
 
 // ============================================================
 //  VAKEEL SAAB — Enhanced Indian Legal AI Prompt Engine
@@ -1263,71 +1265,13 @@ export async function generateDraft(
   context: string,
   advocateDetails?: { fullName?: string; barCouncilNo?: string; courtJurisdiction?: string }
 ): Promise<string> {
-   const apiKey = import.meta.env.VITE_GROQ_API_KEY;
-   console.log('Using API Key:', apiKey ? 'FOUND' : 'MISSING');
-
-   if (!apiKey || apiKey === 'your_groq_api_key_here') {
-      throw new Error('VITE_GROQ_API_KEY is not set in your .env.local file.');
-   }
-
-   const specificPrompt = DOCUMENT_PROMPTS[type] || "";
-   const systemPrompt = `${BASE_SYSTEM_INSTRUCTION}\n\n${specificPrompt}`;
-
-   const modelsToTry = [
-      'qwen/qwen3.8-27b',
-      'openai/gpt-oss-120b',
-      'qwen/qwen3.6-27b',
-      'groq/compound',
-      'llama-3.3-70b-versatile'
-   ];
-
-   let userContent = `Please draft a document based on the following context:\n\n${context}`;
-   if (advocateDetails?.fullName) {
-      userContent += `\n\nADVOCATE / FILING COUNSEL DETAILS:
-Advocate Name: ${advocateDetails.fullName}
-Bar Council Enrollment: ${advocateDetails.barCouncilNo || 'As on record'}
-Primary Jurisdiction: ${advocateDetails.courtJurisdiction || 'High Court'}
-Please personalize the verification clause, vakalatnama sign-off, and filing advocate block using these advocate credentials.`;
-   }
-
-   let lastError: any = null;
-
-   for (const model of modelsToTry) {
-      try {
-         const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-               'Authorization': `Bearer ${apiKey}`,
-               'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-               messages: [
-                  { role: 'system', content: systemPrompt },
-                  { role: 'user', content: userContent }
-               ],
-               model: model,
-               temperature: 0.2,
-               max_tokens: 4000,
-            }),
-         });
-
-         if (!response.ok) {
-            const errorText = await response.text();
-            console.warn(`Groq API model ${model} failed (${response.status}): ${errorText}`);
-            lastError = new Error(`Groq API error for ${model} (${response.status}): ${errorText || 'Failed to generate draft'}`);
-            continue;
-         }
-
-         const data = await response.json();
-         let rawText: string = data.choices[0]?.message?.content || '';
-         // Remove thinking / reasoning XML tags if present
-         rawText = rawText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-         return plainTextToHTML(rawText);
-      } catch (err) {
-         console.warn(`Failed with model ${model}:`, err);
-         lastError = err;
-      }
-   }
-
-   throw lastError || new Error('Failed to generate draft with available models.');
+   const result = await executeLegalPipeline({
+      situation: {
+        incidentDescription: context,
+        rawUserPrompt: context,
+      },
+      overrideType: type as any,
+      advocate: advocateDetails,
+   });
+   return result.contentHtml;
 }
