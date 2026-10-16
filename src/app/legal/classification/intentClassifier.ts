@@ -8,7 +8,6 @@ import {
   VerifiedStatute,
   lookupStatute,
   resolveLegacyProvision,
-  searchStatutesByKeyword,
 } from '../registry/statutoryRegistry';
 
 export type EnhancedDocumentType =

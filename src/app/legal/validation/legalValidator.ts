@@ -5,7 +5,7 @@
 // ============================================================
 
 import { EnhancedDocumentType, ClassificationResult } from '../classification/intentClassifier';
-import { VerifiedStatute, lookupStatute, VERIFIED_REGISTRY } from '../registry/statutoryRegistry';
+import { VerifiedStatute, lookupStatute } from '../registry/statutoryRegistry';
 
 export interface LegalIssue {
   code: string;
@@ -359,6 +359,22 @@ export function validateLegalDraft(params: {
         recommendation:
           'Anticipatory bail under Section 482 BNSS is only maintainable before arrest. Convert to a Regular Bail application under Section 483 BNSS.',
       });
+    }
+  }
+
+  // Cross-reference any prerequisites verified or flagged during intake classification
+  if (classification?.statutoryPrerequisites) {
+    for (const prereq of classification.statutoryPrerequisites) {
+      if (!prerequisiteAudit.some((pa) => pa.prerequisite.toLowerCase() === prereq.requirement.toLowerCase())) {
+        prerequisiteAudit.push({
+          prerequisite: prereq.requirement,
+          satisfied: prereq.isSatisfied,
+          statutoryBasis: prereq.statutoryBasis,
+          details: prereq.isSatisfied
+            ? 'Prerequisite marked satisfied during intake classification.'
+            : (prereq.cureGuidance || 'Prerequisite unfulfilled during intake classification.'),
+        });
+      }
     }
   }
 

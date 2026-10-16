@@ -4,13 +4,10 @@ import {
   ArrowLeft,
   ShieldCheck,
   AlertTriangle,
-  Building,
   User,
-  Calendar,
   MapPin,
   FileText,
   Send,
-  Gavel,
   Scale,
   CheckCircle2,
   Info,
@@ -766,7 +763,45 @@ ${reliefSought.trim()}`);
               </div>
             )}
 
-            {/* 5. Facts Narrative */}
+            {/* 5. Conditional Fields: Legal Notice */}
+            {documentType === 'legal-notice' && (
+              <div className="p-4 bg-white border border-neutral-200 rounded shadow-sm space-y-4">
+                <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <Scale className="w-3.5 h-3.5 text-[var(--gold)]" />
+                  Legal Demand / Notice Particulars
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="text-[11px] font-semibold text-neutral-700 block mb-1">
+                      Total Claim / Outstanding Demand Amount
+                    </label>
+                    <input
+                      type="text"
+                      value={claimAmount}
+                      onChange={(e) => setClaimAmount(e.target.value)}
+                      placeholder="e.g. Rs. 4,50,000/- plus 18% p.a. interest"
+                      className="w-full px-3 py-2 text-xs border border-neutral-300 rounded focus:border-neutral-800 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-semibold text-neutral-700 block mb-1">
+                      Statutory Cure / Notice Deadline
+                    </label>
+                    <input
+                      type="text"
+                      value={noticeDeadline}
+                      onChange={(e) => setNoticeDeadline(e.target.value)}
+                      placeholder="e.g. 15 days (S. 138 NI Act) or 30 days"
+                      className="w-full px-3 py-2 text-xs border border-neutral-300 rounded focus:border-neutral-800 outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 6. Facts Narrative */}
             <div className="p-4 bg-white border border-neutral-200 rounded shadow-sm space-y-3">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-neutral-900 uppercase tracking-wider flex items-center gap-1.5">
@@ -782,6 +817,42 @@ ${reliefSought.trim()}`);
                 rows={5}
                 className="w-full p-3 text-xs border border-neutral-300 rounded focus:border-neutral-800 outline-none"
               />
+            </div>
+
+            {/* 7. Witnesses & Specific Relief */}
+            <div className="p-4 bg-white border border-neutral-200 rounded shadow-sm space-y-4">
+              <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-wider flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5 text-[var(--gold)]" />
+                Evidence, Witnesses &amp; Relief (Optional)
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="text-[11px] font-semibold text-neutral-700 block mb-1">
+                    Available Witnesses &amp; Documents
+                  </label>
+                  <input
+                    type="text"
+                    value={witnessesEvidence}
+                    onChange={(e) => setWitnessesEvidence(e.target.value)}
+                    placeholder="e.g. CCTV, eyewitness, bank transfer receipt"
+                    className="w-full px-3 py-2 text-xs border border-neutral-300 rounded focus:border-neutral-800 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-neutral-700 block mb-1">
+                    Specific Prayer / Relief Sought
+                  </label>
+                  <input
+                    type="text"
+                    value={reliefSought}
+                    onChange={(e) => setReliefSought(e.target.value)}
+                    placeholder="e.g. Immediate registration of FIR and recovery"
+                    className="w-full px-3 py-2 text-xs border border-neutral-300 rounded focus:border-neutral-800 outline-none"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         ) : (
